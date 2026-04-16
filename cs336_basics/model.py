@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import math
-from einops import einsum, rearrange
+import torch.nn.functional as F
 
 class Linear(nn.Module):
     def __init__(self, in_features: int, out_features: int, device=None, dtype=None):
@@ -20,7 +20,7 @@ class Linear(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return einsum(x, self.W, "... in_dim, out_dim in_dim -> ... out_dim")
+        return F.linear(x, self.W)
     
 class Embedding(nn.Module):
     def __init__(self, num_embeddings: int, embedding_dim: int, device=None, dtype=None):
@@ -49,7 +49,7 @@ class RMSNorm(nn.Module):
         x_fp32 = x.to(torch.float32)
         rms = torch.sqrt(torch.mean(x_fp32**2, dim=-1, keepdim=True) + self.eps)
         x_norm = x_fp32 / rms
-        res = einsum(x_norm, self.g, "... d_model, d_model -> ... d_model")
+        res = x_norm * self.g
         return res.to(in_dtype)
     
 class PositionWiseFeedForward(nn.Module):
@@ -66,8 +66,7 @@ class PositionWiseFeedForward(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x1 = self.W1(x)
         x3 = self.W3(x)
-        swish = x1 * torch.sigmoid(x1)
-        gated = swish * x3
+        gated = F.silu(x1) * x3
         return self.W2(gated)
     
 class RotaryPositionalEmbedding(nn.Module):
@@ -132,25 +131,19 @@ class CausalMultiHeadSelfAttention(nn.Module):
         self.W_o = Linear(d_model, d_model, device=device)
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor):
-        b, s, d = x.shape
-        
-        q = self.W_q(x)
-        k = self.W_k(x)
-        v = self.W_v(x)
-        
-        q = rearrange(q, "b s (h d_k) -> b h s d_k", h=self.num_heads)
-        k = rearrange(k, "b s (h d_k) -> b h s d_k", h=self.num_heads)
-        v = rearrange(k, "b s (h d_k) -> b h s d_k", h=self.num_heads)
+        b, s, _ = x.shape
+
+        q = self.W_q(x).view(b, s, self.num_heads, self.d_k).transpose(1, 2)
+        k = self.W_k(x).view(b, s, self.num_heads, self.d_k).transpose(1, 2)
+        v = self.W_v(x).view(b, s, self.num_heads, self.d_k).transpose(1, 2)
 
         q = self.rope(q, token_positions)
         k = self.rope(k, token_positions)
-        
-        mask = torch.tril(torch.ones(s, s, device=x.device, dtype=torch.bool))
 
-        attn_out = scaled_dot_product_attention(q, k, v, mask=mask)
-        
-        out = rearrange(attn_out, "b h s d_k -> b s (h d_k)")
-        
+        attn_out = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+
+        out = attn_out.transpose(1, 2).contiguous().view(b, s, -1)
+
         return self.W_o(out)
 
 class TransformerBlock(nn.Module):
@@ -159,7 +152,7 @@ class TransformerBlock(nn.Module):
         self.attention_rms_norm = RMSNorm(d_model=d_model, device=device)
         self.attention = CausalMultiHeadSelfAttention(d_model=d_model, num_heads=num_heads, rope=rope, device=device)
         self.ffn_rms_norm = RMSNorm(d_model=d_model, device=device)
-        self.ffn = PositionWiseFeedForward(d_model=d_model, d_ff=d_ff)
+        self.ffn = PositionWiseFeedForward(d_model=d_model, d_ff=d_ff, device=device)
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor):
 
