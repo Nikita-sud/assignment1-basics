@@ -1,0 +1,29 @@
+{
+  "os":  "macOS-26.4.1-arm64-arm-64bit",
+  "python":  "CPython 3.12.13",
+  "startedAt":  "2026-04-24T06:45:13.091251Z",
+  "program":  "/Users/nichitabulgaru/Documents/Stanford CS336/assignment1-basics/cs336_basics/training.py",
+  "codePath":  "cs336_basics/training.py",
+  "codePathLocal":  "cs336_basics/training.py",
+  "git":  {
+    "remote":  "https://github.com/Nikita-sud/assignment1-basics.git",
+    "commit":  "e3cfcc1e3b256b4bb6ee0cdbfa6d664ba15e4598"
+  },
+  "email":  "n.bulgaru@student.maastrichtuniversity.nl",
+  "root":  "/Users/nichitabulgaru/Documents/Stanford CS336/assignment1-basics",
+  "host":  "MacBook-Pro.local",
+  "executable":  "/Users/nichitabulgaru/miniconda3/envs/cs336-a3/bin/python3",
+  "cpu_count":  18,
+  "cpu_count_logical":  18,
+  "disk":  {
+    "/":  {
+      "total":  "1995165736960",
+      "used":  "751180468224"
+    }
+  },
+  "memory":  {
+    "total":  "68719476736"
+  },
+  "apple":  {},
+  "writerId":  "0rj0jhh6v9jcanvum4hshxl033fcqrb6"
+}

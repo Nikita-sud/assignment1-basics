@@ -6,6 +6,7 @@ import os
 import typing
 from typing import Optional, Callable
 import time
+import wandb
 
 from cs336_basics.model import TransformerLM
 
@@ -183,6 +184,25 @@ def train():
     device = 'mps' if torch.mps.is_available() else 'cpu'
     print(f"Using device: {device}")
 
+    wandb.init(
+        project="cs336-tinystories",
+        config=dict(
+            vocab_size=vocab_size,
+            context_length=context_length,
+            d_model=d_model,
+            d_ff=d_ff,
+            num_layers=num_layers,
+            num_heads=num_heads,
+            batch_size=batch_size,
+            max_steps=max_steps,
+            alpha_max=alpha_max,
+            alpha_min=alpha_min,
+            T_w=T_w,
+            T_c=T_c,
+            device=device,
+        ),
+    )
+
     model = TransformerLM(
         vocab_size=vocab_size,
         context_length=context_length,
@@ -228,6 +248,7 @@ def train():
                 val_loss = F.cross_entropy(val_logits.view(-1, val_logits.size(-1)), y_val.view(-1))
             model.train()
             pbar.set_postfix(val_loss=f"{val_loss.item():.4f}", lr=f"{lr:.6f}")
+            wandb.log({"val/loss": val_loss.item()}, step=step)
 
         x, y = fast_get_batch(train_data, batch_size, context_length, device)
 
@@ -241,11 +262,15 @@ def train():
 
         optimizer.step()
 
+        pbar.set_postfix(train_loss=f"{loss.item():.4f}", lr=f"{lr:.6f}")
+        wandb.log({"train/loss": loss.item(), "lr": lr}, step=step)
+
         if step > 0 and step % save_interval == 0:
             checkpoint_path = os.path.join(out_dir, f"ckpt_step_{step}.pt")
             save_checkpoint(model, optimizer, step, checkpoint_path)
             tqdm.write(f"Checkpoint saved: {checkpoint_path}")
 
+    wandb.finish()
     print("Training complete!")
 
 if __name__ == "__main__":
